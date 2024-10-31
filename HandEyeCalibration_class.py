@@ -3,6 +3,7 @@ import numpy as np
 import glob
 import matplotlib.pyplot as plt
 import os
+from statical_camera_info import get_camera_intrinsics
 
 class CameraCalibration:
     """Camera calibration class, this class takes as input a folder with images and a folder with the corresponding Base2endeffector transforms
@@ -10,13 +11,13 @@ class CameraCalibration:
     The images with the corner detection are saved in a folder called 'DetectedCorners'
 
     This class has 4 optional parameters:
-    pattern_size: the number of corners in the chessboard pattern, default is (4,7)
-    square_size: the size of the squares in the chessboard pattern, default is 33/1000
+    pattern_size: the number of corners in the chessboard pattern, default is (8,14)
+    square_size: the size of the squares in the chessboard pattern, default is 15/1000
     ShowProjectError: if True, it will show the reprojection error for each image in a bar plot, default is False
     ShowCorners: if True, it will show the chessboard corners for each image, default is False
 
     """
-    def __init__(self, image_folder, Transforms_folder, pattern_size=(4, 7), square_size=33/1000, ShowProjectError=False, ShowCorners=False):
+    def __init__(self, image_folder, Transforms_folder, pattern_size=(7, 13), square_size=15/1000, ShowProjectError=False, ShowCorners=False):
 
         #Initiate parameters
         self.pattern_size = pattern_size
@@ -31,9 +32,10 @@ class CameraCalibration:
 
         #find chessboard corners and index of images with chessboard corners
         self.chessboard_corners, self.IndexWithImg = self.find_chessboard_corners(self.images, self.pattern_size, ShowCorners=ShowCorners)
-        self.intrinsic_matrix = self.calculate_intrinsics(self.chessboard_corners, self.IndexWithImg,
-                                                           self.pattern_size, self.square_size,
-                                                           self.images[0].shape[:2], ShowProjectError = ShowProjectError)
+        intrinsic_matrix, depth_scale, coefficients = get_camera_intrinsics()
+        self.intrinsic_matrix = intrinsic_matrix #self.calculate_intrinsics(self.chessboard_corners, self.IndexWithImg,
+                                                        #    self.pattern_size, self.square_size,
+                                                        #    self.images[0].shape[:2], ShowProjectError = ShowProjectError)
 
         #Remove transforms were corners weren't detected
         self.T_base2EE_list = [self.All_T_base2EE_list[i] for i in self.IndexWithImg]
@@ -56,7 +58,11 @@ class CameraCalibration:
         self.R_vec_cam2target = [cv2.Rodrigues(R)[0] for R in self.R_cam2target]
         self.T_cam2target = [T[:3, 3] for T in self.T_cam2target]   #4x4 transformation matrix
 
+        #Calculate T_target2cam
+
         #Calculate T_Base2EE
+        print(f'{self.T_base2EE_list}\n')
+
 
         self.TEE2Base = [np.linalg.inv(T) for T in self.T_base2EE_list]
         self.REE2Base = [T[:3, :3] for T in self.TEE2Base]
@@ -79,8 +85,8 @@ class CameraCalibration:
 
             #print and save each results as .npz file
             print("The results for method", i, "are:")
-            print("R_cam2gripper:", self.R_cam2gripper)
-            print("t_cam2gripper:", self.t_cam2gripper)
+            print("R_cam2gripper:\n", self.R_cam2gripper)
+            print("t_cam2gripper:\n", self.t_cam2gripper)
             #Create 4x4 transfromation matrix
             self.T_cam2gripper = np.concatenate((self.R_cam2gripper, self.t_cam2gripper), axis=1)
             self.T_cam2gripper = np.concatenate((self.T_cam2gripper, np.array([[0, 0, 0, 1]])), axis=0)
@@ -220,6 +226,8 @@ class CameraCalibration:
 
 if __name__== "__main__":
     # Create an instance of the class
+    # image_folder = "example_Cal2/RGBImgs/"
+    # PoseFolder = "example_Cal2/T_base2ee/"
     image_folder = "Cal2/RGBImgs/"
     PoseFolder = "Cal2/T_base2ee/"
     calib = CameraCalibration(image_folder, PoseFolder,ShowProjectError=True)
