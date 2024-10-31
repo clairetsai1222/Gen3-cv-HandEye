@@ -77,10 +77,10 @@ class CameraCalibration:
             
             # Unpack the four results from calibrateRobotWorldHandEye
             R_cam2base, t_cam2base, R_gripper2target, t_gripper2target = cv2.calibrateRobotWorldHandEye(
+                self.tEE2Base,
+                self.REE2Base,     # Rotation from end-effector to base
                 self.RTarget2Cam,  # Rotation from target (chessboard) to camera
                 self.TTarget2Cam,  # Translation from target (chessboard) to camera
-                self.REE2Base,     # Rotation from end-effector to base
-                self.tEE2Base,     # Translation from end-effector to base
                 method=i
             )
 

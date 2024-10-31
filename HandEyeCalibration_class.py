@@ -58,16 +58,15 @@ class CameraCalibration:
         self.R_vec_cam2target = [cv2.Rodrigues(R)[0] for R in self.R_cam2target]
         self.T_cam2target = [T[:3, 3] for T in self.T_cam2target]   #4x4 transformation matrix
 
-        #Calculate T_target2cam
+        print(f"R_cam2target{self.R_cam2target}\n")
 
         #Calculate T_Base2EE
-        print(f'{self.T_base2EE_list}\n')
-
-
         self.TEE2Base = [np.linalg.inv(T) for T in self.T_base2EE_list]
         self.REE2Base = [T[:3, :3] for T in self.TEE2Base]
         self.R_vecEE2Base = [cv2.Rodrigues(R)[0] for R in self.REE2Base]
         self.tEE2Base = [T[:3, 3] for T in self.TEE2Base]
+
+        print(f"REE2Base{self.REE2Base}\n")
 
         #Create folder to save final transforms
         if not os.path.exists("FinalTransforms"):
@@ -75,42 +74,47 @@ class CameraCalibration:
         #solve hand-eye calibration
         for i in range(0, 5):
             print("Method:", i)
-            self.R_cam2gripper, self.t_cam2gripper = cv2.calibrateHandEye(
-                self.R_cam2target,
-                self.T_cam2target,
-                self.R_vecEE2Base,
-                self.tEE2Base,
+            self.R_cam2base, self.t_cam2base = cv2.calibrateHandEye(
+                R_gripper2base=self.REE2Base,
+                t_gripper2base=self.tEE2Base,
+                R_target2cam=self.R_cam2target,
+                t_target2cam=self.T_cam2target,
                 method=i
             )
 
             #print and save each results as .npz file
             print("The results for method", i, "are:")
-            print("R_cam2gripper:\n", self.R_cam2gripper)
-            print("t_cam2gripper:\n", self.t_cam2gripper)
+            print("R_cam2base:\n", self.R_cam2base)
+            print("t_cam2base:\n", self.t_cam2base)
             #Create 4x4 transfromation matrix
-            self.T_cam2gripper = np.concatenate((self.R_cam2gripper, self.t_cam2gripper), axis=1)
-            self.T_cam2gripper = np.concatenate((self.T_cam2gripper, np.array([[0, 0, 0, 1]])), axis=0)
+            self.T_cam2base = np.concatenate((self.R_cam2base, self.t_cam2base), axis=1)
+            self.T_cam2base = np.concatenate((self.T_cam2base, np.array([[0, 0, 0, 1]])), axis=0)
             #Save results in folder FinalTransforms
-            np.savez(f"FinalTransforms/T_cam2gripper_Method_{i}.npz", self.T_cam2gripper)
+            np.savez(f"FinalTransforms/T_cam2base_Method_{i}.npz", self.T_cam2base)
             #Save the inverse transfrom too
-            self.T_gripper2cam = np.linalg.inv(self.T_cam2gripper)
+            self.T_gripper2cam = np.linalg.inv(self.T_cam2base)
             np.savez(f"FinalTransforms/T_gripper2cam_Method_{i}.npz", self.T_gripper2cam)
 
         #solve hand-eye calibration using calibrateRobotWorldHandEye
         for i in range(0,2):
-            self.R_base2world, self.t_base2world, self.R_gripper2cam, self.t_gripper2cam= cv2.calibrateRobotWorldHandEye( self.RTarget2Cam, self.TTarget2Cam, self.REE2Base, self.tEE2Base, method=i)
+            self.R_base2world, self.t_base2world, self.R_gripper2cam, self.t_gripper2cam= cv2.calibrateRobotWorldHandEye( 
+                self.REE2Base, 
+                self.tEE2Base, 
+                self.RTarget2Cam, 
+                self.TTarget2Cam, 
+                method=i)
             #print and save each results as .npz file
             print("The results for method using calibrateRobotWorldHandEye", i+4, "are:")
-            print("R_cam2gripper:", self.R_gripper2cam)
-            print("t_cam2gripper:", self.t_gripper2cam)
+            print("R_cam2base:", self.R_gripper2cam)
+            print("t_cam2base:", self.t_gripper2cam)
             #Create 4x4 transfromation matrix T_gripper2cam
             self.T_gripper2cam = np.concatenate((self.R_gripper2cam, self.t_gripper2cam), axis=1)
             self.T_gripper2cam = np.concatenate((self.T_gripper2cam, np.array([[0, 0, 0, 1]])), axis=0)
             #Save results in folder FinalTransforms
             np.savez(f"FinalTransforms/T_gripper2cam_Method_{i+4}.npz", self.T_gripper2cam)
             #save inverse too
-            self.T_cam2gripper = np.linalg.inv(self.T_gripper2cam)
-            np.savez(f"FinalTransforms/T_cam2gripper_Method_{i+4}.npz", self.T_cam2gripper)
+            self.T_cam2base = np.linalg.inv(self.T_gripper2cam)
+            np.savez(f"FinalTransforms/T_cam2base_Method_{i+4}.npz", self.T_cam2base)
 
     def find_chessboard_corners(self, images, pattern_size, ShowCorners=False):
         """Finds the chessboard patterns and, if ShowImage is True, shows the images with the corners"""
@@ -143,6 +147,7 @@ class CameraCalibration:
                 print("No chessboard found in image: ", i)
                 i = i + 1
         return chessboard_corners, IndexWithImg
+
 
     def compute_camera_poses(self, chessboard_corners, pattern_size, square_size, intrinsic_matrix, Testing=False):
         """Takes the chessboard corners and computes the camera poses"""
